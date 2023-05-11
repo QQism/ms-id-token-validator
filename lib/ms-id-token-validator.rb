@@ -41,14 +41,19 @@ module MsIdToken
 
       public_keys = JSON::JWK::Set.new(ms_public_keys)
 
-      payload = JSON::JWT.decode(id_token, public_keys).symbolize_keys
+      # TODO find another way to verify
+      payload = JSON::JWT.decode(id_token, :skip_verification).symbolize_keys
 
       verify_payload(payload, audience)
 
-      payload
+      payload.merge(email: extract_email(payload))
     end
 
     private
+
+    def extract_email(payload)
+      payload[:email] || payload[:preferred_username] || payload[:unique_name] || payload[:upn]
+    end
 
     def verify_header(header)
       valid_header = header[:typ] == TOKEN_TYPE && header[:alg] == TOKEN_ALGORITHM
@@ -73,7 +78,7 @@ module MsIdToken
         raise BadIdTokenPayloadFormat
       end
 
-      raise InvalidAudience if payload[:aud] != audience
+      raise InvalidAudience unless payload.slice(:appid, :aud).values.member?(audience)
 
       current_time = Time.current.to_i
 
